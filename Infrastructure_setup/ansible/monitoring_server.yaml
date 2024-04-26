@@ -1,0 +1,79 @@
+---
+- name: Install Prometheus and Grafana
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update yum packages
+      yum:
+        name: "*"
+        state: latest
+
+    - name: Add Prometheus user
+      user:
+        name: prometheus
+        shell: /bin/false
+        createhome: no
+
+    - name: Create directories for Prometheus
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: prometheus
+        group: prometheus
+        mode: '0755'
+      loop:
+        - /data
+        - /etc/prometheus
+        - /var/lib/prometheus
+
+    - name: Download Prometheus tarball
+      get_url:
+        url: https://github.com/prometheus/prometheus/releases/download/v2.47.1/prometheus-2.47.1.linux-amd64.tar.gz
+        dest: /tmp/prometheus-2.47.1.linux-amd64.tar.gz
+
+    - name: Extract Prometheus tarball
+      unarchive:
+        src: /tmp/prometheus-2.47.1.linux-amd64.tar.gz
+        dest: /tmp/
+        remote_src: yes
+
+    - name: Move Prometheus files to appropriate directories
+      command: mv "{{ item.src }}" "{{ item.dest }}"
+      loop:
+        - { src: '/tmp/prometheus-2.47.1.linux-amd64/console*', dest: '/etc/prometheus/' }
+        - { src: '/tmp/prometheus-2.47.1.linux-amd64/prometheus.yml', dest: '/etc/prometheus/' }
+
+    - name: Move Prometheus binaries to /usr/local/bin
+      command: mv "{{ item }}" /usr/local/bin/
+      loop:
+        - /tmp/prometheus-2.47.1.linux-amd64/prometheus
+        - /tmp/prometheus-2.47.1.linux-amd64/promtool
+
+    - name: Move systemd unit file for Prometheus
+      copy:
+        src: /tmp/prometheus.service
+        dest: /etc/systemd/system/
+
+    - name: Reload systemd and enable Prometheus service
+      systemd:
+        daemon_reload: yes
+        enabled: yes
+        state: started
+        name: prometheus
+
+    - name: Add Grafana repository
+      copy:
+        src: /tmp/grafana.repo
+        dest: /etc/yum.repos.d/
+
+    - name: Install Grafana
+      yum:
+        name: grafana
+        state: present
+
+    - name: Reload systemd and enable Grafana service
+      systemd:
+        daemon_reload: yes
+        enabled: yes
+        state: started
+        name: grafana-server

@@ -1,0 +1,137 @@
+---
+- name: Install Git, Jenkins, Docker, and Trivy
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update yum packages
+      yum:
+        name: "*"
+        state: latest
+      tags:
+        - packages
+
+    - name: Install Git
+      yum:
+        name: git
+        state: present
+      tags:
+        - git
+
+    - name: Add Jenkins repository
+      get_url:
+        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+      tags:
+        - jenkins
+
+    - name: Import Jenkins repository key
+      rpm_key:
+        key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+      tags:
+        - jenkins
+
+    - name: Upgrade packages
+      yum:
+        name: "*"
+        state: latest
+      tags:
+        - packages
+
+    - name: Install Java OpenJDK 11
+      amazon_linux_extras:
+        name: java-openjdk11
+        state: present
+      tags:
+        - java
+
+    - name: Install Jenkins
+      yum:
+        name: jenkins
+        state: present
+      tags:
+        - jenkins
+
+    - name: Enable Jenkins service
+      service:
+        name: jenkins
+        enabled: yes
+        state: started
+      tags:
+        - jenkins
+
+    - name: Install Docker
+      yum:
+        name: docker
+        state: present
+      tags:
+        - docker
+
+    - name: Add ec2-user to docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+      tags:
+        - docker
+
+    - name: Add jenkins to docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+      tags:
+        - docker
+
+    - name: Set permissions on docker socket
+      file:
+        path: /var/run/docker.sock
+        mode: '0777'
+      tags:
+        - docker
+
+    - name: Enable Docker service
+      service:
+        name: docker
+        enabled: yes
+        state: started
+      tags:
+        - docker
+
+    - name: Install epel repository
+      amazon_linux_extras:
+        name: epel
+        state: present
+      tags:
+        - trivy
+
+    - name: Install wget
+      yum:
+        name: wget
+        state: present
+      tags:
+        - trivy
+
+    - name: Download Trivy RPM
+      get_url:
+        url: https://github.com/aquasecurity/trivy/releases/download/v0.18.3/trivy_0.18.3_Linux-64bit.rpm
+        dest: /tmp/trivy_0.18.3_Linux-64bit.rpm
+      tags:
+        - trivy
+
+    - name: Install Trivy
+      yum:
+        name: /tmp/trivy_0.18.3_Linux-64bit.rpm
+        state: present
+      tags:
+        - trivy
+
+    - name: Run SonarQube container
+      docker_container:
+        name: sonar
+        image: sonarqube:lts-community
+        ports:
+          - "9000:9000"
+        state: started
+        detach: yes
+      tags:
+        - sonarqube
